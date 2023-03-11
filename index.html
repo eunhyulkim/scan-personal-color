@@ -1,0 +1,369 @@
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>카메라 열기</title>
+    <style>
+      html {
+        background: '#f0f0f0';
+      }
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: 100vh;
+      }
+      #card {
+        position: relative;
+        display: none;
+      }
+      #display {
+        position: absolute;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        left: 0;
+        bottom: 0;
+        width: 600px;
+        background: black;
+        box-sizing: border-box;
+        padding: 20px;
+        height: 215px;
+        border-radius: 10px;
+        font-size: 72px;
+        color: white;
+      }
+      #btn-start {
+        font-size: 60px;
+        padding: 40px;
+        border-radius: 20px;
+        border: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="card">
+      <video id="video" width="600" height="900" autoplay></video>
+      <canvas
+        id="canvas"
+        width="600"
+        height="900"
+        style="display: none"
+      ></canvas>
+      <div id="display"></div>
+    </div>
+    <button id="btn-start">컬러 스캔하기</button>
+
+    <script>
+      // 버튼 클릭 시 카메라를 엽니다.
+      const btnStart = document.getElementById('btn-start')
+      const canvas = document.getElementById('canvas')
+      const video = document.getElementById('video')
+      const card = document.getElementById('card')
+      const PIXEL_COUNT = 100
+
+      btnStart.addEventListener('click', () => {
+        btnStart.style.display = 'none'
+        card.style.display = 'block'
+
+        // 미디어 스트림을 요청합니다.
+        navigator.mediaDevices
+          .getUserMedia({ video: true })
+          .then((stream) => {
+            // 비디오 요소에 미디어 스트림을 할당합니다.
+            const video = document.getElementById('video')
+            video.srcObject = stream
+            video.play()
+
+            // canvas 요소를 가져와 2D 컨텍스트를 얻어옵니다.
+            const canvas = document.getElementById('canvas')
+            const ctx = canvas.getContext('2d')
+            const display = document.getElementById('display')
+
+            // 매 프레임마다 canvas에 비디오 프레임을 그립니다.
+            setInterval(() => {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+              const centerX = canvas.width / 2
+              const centerY = canvas.height / 2
+              const cellSize = canvas.width / 3
+              const startX = centerX - cellSize / 2
+              const startY = centerY - cellSize / 2
+              const endX = startX + cellSize
+              const endY = startY + cellSize
+
+              const pixels = []
+              while (pixels.length < PIXEL_COUNT) {
+                const x = Math.floor(Math.random() * cellSize + startX)
+                const y = Math.floor(Math.random() * cellSize + startY)
+                if (x >= startX && x <= endX && y >= startY && y <= endY) {
+                  pixels.push({ x, y })
+                }
+              }
+
+              // 캔버스를 9분할한 크기 계산
+              const cellWidth = canvas.width / 3
+              const cellHeight = canvas.height / 3
+
+              // 캔버스에서 픽셀 데이터를 가져와 RGB 값을 검사합니다.
+              const imageData = ctx.getImageData(
+                0,
+                0,
+                canvas.width,
+                canvas.height
+              )
+              const pixelData = imageData.data
+              const colors = pixels.map((p) => {
+                const i = (p.y * canvas.width + p.x) * 4
+                return [pixelData[i], pixelData[i + 1], pixelData[i + 2]]
+              })
+
+              const records = colors
+                .map((color) => rgbToHex(...color))
+                .reduce((acc, color) => {
+                  const p = getSimilarColorPalette(color)
+                  acc[p] = (acc[p] ?? 0) + 1
+                  return acc
+                }, {})
+
+              const ans = Object.keys(records).find(
+                (k) => records[k] === Math.max(...Object.values(records))
+              )
+
+              display.innerText = ans
+            }, 1000)
+          })
+          .catch((err) => {
+            console.error(err)
+          })
+
+        video.addEventListener('click', () => {
+          if (video.paused) {
+            video.play()
+          } else {
+            video.pause()
+          }
+        })
+      })
+
+      const colors = {
+        pale: 'pale',
+        light: 'light',
+        light_grayish: 'light grayish',
+        soft: 'soft',
+        grayish: 'grayish',
+        dull: 'dull',
+        dark_grayish: 'dark grayish',
+        dark: 'dark',
+        bright: 'bright',
+        strong: 'strong',
+        deep: 'deep',
+        vivid: 'vivid',
+        unknown: 'unknown',
+      }
+
+      const colorRecords = {
+        [colors.vivid]: [
+          '#c53e2d',
+          '#cf9c49',
+          '#f5e367',
+          '#6ca3dc',
+          '#a4e164',
+          '#131cd5',
+          '#5e27d5',
+        ],
+        [colors.pale]: [
+          '#eed6d7',
+          '#f5ebd9',
+          '#fefadc',
+          '#ebf9da',
+          '#dfebf8',
+          '#d4d4f4',
+          '#e1d6f4',
+        ],
+        [colors.light]: [
+          '#dea6a3',
+          '#ead6ab',
+          '#fcf5ba',
+          '#cfedac',
+          '#b6d8ef',
+          '#9fa0e9',
+          '#bba2ea',
+        ],
+        [colors.strong]: [
+          '#97453f',
+          '#9f7546',
+          '#a2974b',
+          '#85af58',
+          '#5e89ac',
+          '#3738a6',
+          '#623da7',
+        ],
+        [colors.dull]: [
+          '#81615f',
+          '#766955',
+          '#7e7957',
+          '#778863',
+          '#6b7d8a',
+          '#5d5d89',
+          '#6d6089',
+        ],
+        [colors.dark_grayish]: [
+          '#5d5353',
+          '#5e5a56',
+          '#5c5a52',
+          '#5c6155',
+          '#575d61',
+          '#53535f',
+          '#58535f',
+        ],
+        [colors.bright]: [
+          '#c8736e',
+          '#d6b678',
+          '#e9df83',
+          '#b6e185',
+          '#8dbade',
+          '#6869d7',
+          '#926ed8',
+        ],
+        [colors.light_grayish]: [
+          '#bdabaa',
+          '#c2b8ac',
+          '#d7d3b5',
+          '#bbc6ae',
+          '#b0bcc5',
+          '#a9a9c3',
+          '#b3aac3',
+        ],
+        [colors.soft]: [
+          '#af8381',
+          '#bfa686',
+          '#d6cf91',
+          '#b1cd8e',
+          '#8babc5',
+          '#7778bc',
+          '#896ebe',
+        ],
+        [colors.grayish]: [
+          '#8d807e',
+          '#9d9182',
+          '#929080',
+          '#8c9381',
+          '#838d92',
+          '#7e7e91',
+          '#857f91',
+        ],
+        [colors.deep]: [
+          '#6b312d',
+          '#735331',
+          '#7e753c',
+          '#5f7d3e',
+          '#42617a',
+          '#262775',
+          '#462b77',
+        ],
+        [colors.dark]: [
+          '#473231',
+          '#392f25',
+          '#323021',
+          '#3b452e',
+          '#2e373b',
+          '#27273c',
+          '#2c2439',
+        ],
+      }
+
+      function getSimilarColorPalette(rgb) {
+        const rates = Object.keys(colorRecords).map((key) => {
+          return [
+            key,
+            Math.max(
+              ...colorRecords[key].map((record) =>
+                colorSimilarity(rgb, record.slice(1))
+              )
+            ),
+          ]
+        })
+        const maxRate = Math.max(...rates.map((rate) => rate[1]))
+        return rates.find((rate) => rate[1] === maxRate)[0]
+      }
+
+      function colorSimilarity(color1, color2) {
+        // HEX값을 RGB값으로 변환
+        let r1 = parseInt(color1.substring(0, 2), 16)
+        let g1 = parseInt(color1.substring(2, 4), 16)
+        let b1 = parseInt(color1.substring(4, 6), 16)
+
+        let r2 = parseInt(color2.substring(0, 2), 16)
+        let g2 = parseInt(color2.substring(2, 4), 16)
+        let b2 = parseInt(color2.substring(4, 6), 16)
+
+        // RGB값의 차이를 계산
+        let rDiff = Math.abs(r1 - r2)
+        let gDiff = Math.abs(g1 - g2)
+        let bDiff = Math.abs(b1 - b2)
+
+        // 유사도 계산
+        let diff = rDiff + gDiff + bDiff
+        let percentDiff = Math.floor((diff / 765) * 100)
+        let similarity = 100 - percentDiff
+
+        return similarity
+      }
+
+      function hexToRgb(hexCode) {
+        hexCode = hexCode.replace('#', '') // # 제거
+        var r = parseInt(hexCode.substring(0, 2), 16)
+        var g = parseInt(hexCode.substring(2, 4), 16)
+        var b = parseInt(hexCode.substring(4, 6), 16)
+        return [r, g, b]
+      }
+
+      function rgbToHex(r, g, b) {
+        const hexR = r.toString(16).padStart(2, '0')
+        const hexG = g.toString(16).padStart(2, '0')
+        const hexB = b.toString(16).padStart(2, '0')
+        return hexR + hexG + hexB
+      }
+
+      function rgbToHsl(r, g, b) {
+        // RGB 값 0~255 범위에서 0~1 범위로 정규화
+        r = r / 255
+        g = g / 255
+        b = b / 255
+
+        // 최소값과 최대값 구하기
+        var max = Math.max(r, g, b)
+        var min = Math.min(r, g, b)
+
+        // 빛의 색상의 진한 정도 구하기
+        var luminance = (max + min) / 2
+
+        // 색조 구하기
+        var hue = 0
+        if (max == min) {
+          hue = 0
+        } else if (max == r) {
+          hue = (60 * ((g - b) / (max - min))) % 360
+        } else if (max == g) {
+          hue = 60 * ((b - r) / (max - min)) + 120
+        } else {
+          hue = 60 * ((r - g) / (max - min)) + 240
+        }
+
+        // 채도 구하기
+        var saturation = 0
+        if (luminance == 0 || max == min) {
+          saturation = 0
+        } else if (luminance <= 0.5) {
+          saturation = (max - min) / (2 * luminance)
+        } else {
+          saturation = (max - min) / (2 - 2 * luminance)
+        }
+
+        // 반환값
+        return [hue, Math.floor(saturation * 100), Math.floor(luminance * 100)]
+      }
+    </script>
+  </body>
+</html>
